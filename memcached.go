@@ -3,12 +3,13 @@ package easy_memcached
 import (
 	"github.com/bradfitz/gomemcache/memcache"
 )
+
 type EasyMemcached struct {
 	Prefix string
 	Client *memcache.Client
 }
 
-func (m *EasyMemcached) Set(key, value string, ttl int32) error {
+func (m *EasyMemcached) Set(key string, value []byte, ttl int32) error {
 	err := m.Client.Set(&memcache.Item{
 		Key:        m.Prefix + key,
 		Value:      []byte(value),
@@ -17,11 +18,11 @@ func (m *EasyMemcached) Set(key, value string, ttl int32) error {
 	return err
 }
 
-func (m *EasyMemcached) Get(key string) (value string, err error) {
+func (m *EasyMemcached) Get(key string) (value []byte, err error) {
 	item, err := m.Client.Get(m.Prefix + key)
 
 	if err == nil {
-		value = string(item.Value)
+		value = item.Value
 	}
 	return
 
