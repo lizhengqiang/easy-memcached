@@ -1,7 +1,12 @@
 # easy-memcached
 
+## Intro
 > 针对国产框架移植过来的程序,操作缓存时候难免会遇到前缀的问题,主要来解决这个问题
 > 顺便借鉴了一下Redis的操作风格,使用起来可能会比较方便一些
+
+## Use
+
+> go get -u github.com/mougeli/easy-memcached
 
 ## Struct
 
