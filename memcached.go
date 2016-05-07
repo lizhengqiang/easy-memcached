@@ -1,32 +1,49 @@
-package easy_memcached
+// Redis风格的Memcached客户端
+package memcached
 
 import (
 	"github.com/bradfitz/gomemcache/memcache"
+	"time"
 )
 
+// 支持前缀的Memcached客户端
 type EasyMemcached struct {
 	Prefix string
 	Client *memcache.Client
 }
 
-func (m *EasyMemcached) Set(key string, value []byte, ttl int32) error {
+func (m *EasyMemcached) Set(key, value string, expire int32) error {
 	err := m.Client.Set(&memcache.Item{
 		Key:        m.Prefix + key,
 		Value:      []byte(value),
-		Expiration: ttl,
+		Expiration: expire,
 	})
 	return err
 }
 
-func (m *EasyMemcached) Get(key string) (value []byte, err error) {
+func (m *EasyMemcached) Add(key, value string, expire int32) error {
+	err := m.Client.Add(&memcache.Item{
+		Key:        m.Prefix + key,
+		Value:      []byte(value),
+		Expiration: expire,
+	})
+	return err
+}
+
+func (m *EasyMemcached) Get(key string) (value string, err error) {
 	item, err := m.Client.Get(m.Prefix + key)
 
 	if err == nil {
-		value = item.Value
+		value = string(item.Value)
 	}
 	return
 
 }
+
+func (m *EasyMemcached) Del(key string) (err error) {
+	return m.Client.Delete(m.Prefix + key)
+}
+
 func (m *EasyMemcached) Rename(source string, target string) error {
 	item, errGet := m.Client.Get(m.Prefix + source)
 
@@ -61,4 +78,45 @@ func (m *EasyMemcached) Ping() error {
 		return errGet
 	}
 	return nil
+}
+
+// 分布式锁
+// 广博写的, 不要喷我!
+type DistributeLock struct {
+	Memcached *EasyMemcached
+	Item      *memcache.Item
+	Ttl       int32
+}
+
+func (lock *DistributeLock) CheckLock(ch chan bool) {
+	RETRY:
+	if err := lock.Memcached.Add(lock.Item.Key, string(lock.Item.Value), lock.Item.Expiration); err != nil {
+		time.Sleep(time.Duration(lock.Ttl) * time.Second)
+		goto RETRY
+	}
+	ch <- true
+}
+
+func (m *EasyMemcached) GetLock(key, value string, expiration, ttl int32) (lock *DistributeLock) {
+	lock = &DistributeLock{
+		Memcached: m,
+		Item: &memcache.Item{
+			Key:        key,
+			Value:      []byte(value),
+			Expiration: expiration,
+		},
+		Ttl: ttl,
+	}
+	return lock
+}
+
+func (lock *DistributeLock) Lock() {
+	ch := make(chan bool)
+	go lock.CheckLock(ch)
+	_ = <-ch
+}
+
+func (lock *DistributeLock) Unlock() (err error) {
+	err = lock.Memcached.Del(lock.Item.Key)
+	return
 }
