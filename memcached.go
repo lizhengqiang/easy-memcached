@@ -12,30 +12,31 @@ type EasyMemcached struct {
 	Client *memcache.Client
 }
 
-func (m *EasyMemcached) Set(key, value string, expire int32) error {
+func (m *EasyMemcached) Set(key string, value []byte, expire int32) error {
 	err := m.Client.Set(&memcache.Item{
 		Key:        m.Prefix + key,
-		Value:      []byte(value),
+		Value:      value,
 		Expiration: expire,
 	})
 	return err
 }
 
-func (m *EasyMemcached) Add(key, value string, expire int32) error {
+func (m *EasyMemcached) Add(key string, value []byte, expire int32) error {
 	err := m.Client.Add(&memcache.Item{
 		Key:        m.Prefix + key,
-		Value:      []byte(value),
+		Value:     value,
 		Expiration: expire,
 	})
 	return err
 }
 
-func (m *EasyMemcached) Get(key string) (value string, err error) {
+func (m *EasyMemcached) Get(key string) (value []byte, err error) {
 	item, err := m.Client.Get(m.Prefix + key)
 
-	if err == nil {
-		value = string(item.Value)
+	if err != nil {
+		return
 	}
+	value = item.Value
 	return
 
 }
@@ -90,19 +91,19 @@ type DistributeLock struct {
 
 func (lock *DistributeLock) CheckLock(ch chan bool) {
 	RETRY:
-	if err := lock.Memcached.Add(lock.Item.Key, string(lock.Item.Value), lock.Item.Expiration); err != nil {
+	if err := lock.Memcached.Add(lock.Item.Key, lock.Item.Value, lock.Item.Expiration); err != nil {
 		time.Sleep(time.Duration(lock.Ttl) * time.Second)
 		goto RETRY
 	}
 	ch <- true
 }
 
-func (m *EasyMemcached) GetLock(key, value string, expiration, ttl int32) (lock *DistributeLock) {
+func (m *EasyMemcached) GetLock(key string, value []byte, expiration, ttl int32) (lock *DistributeLock) {
 	lock = &DistributeLock{
 		Memcached: m,
 		Item: &memcache.Item{
 			Key:        key,
-			Value:      []byte(value),
+			Value:      value,
 			Expiration: expiration,
 		},
 		Ttl: ttl,
